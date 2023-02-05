@@ -85,17 +85,14 @@ class RiskManager:
         max_accum_loss, n_span = self.extract_max_accum_loss(pl_array)
         max_loss, max_profit = self.extract_extremes(pl_array)
 
-        div = 1 if max_accum_loss == 0 else max_accum_loss
-        avg_invest_during_losing = selected.loc[n_span[0]: n_span[1], 'invest'].mean()
         roi = profit_loss / avg_invest
         rot = profit_loss / trade_volume
+        div = 1 if max_accum_loss == 0 else max_accum_loss
+        avg_invest_during_losing = selected.loc[n_span[0]: n_span[1], 'invest'].mean() if n_span is not None else 1
+        allowed_inv = int(self.configs['capital'] * self.configs['risk_taking_ratio'] * avg_invest_during_losing / div) if max_accum_loss > 0 else float("inf")
 
         ret = {
-            "Allow Investment Volume": int(
-                self.configs['capital'] *\
-                self.configs['risk_taking_ratio'] *\
-                avg_invest_during_losing / div
-            ),
+            "Allowed Investment Volume": allowed_inv,
             "Average Invest": avg_invest,
             "P&L": profit_loss,
             "Profit-Risk ratio": profit_loss / div,
