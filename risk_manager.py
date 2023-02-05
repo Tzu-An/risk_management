@@ -2,10 +2,18 @@
 Manage risk based on the trading record analysis
 """
 import os
+import argparse
 import pandas as pd
 
 import common
 
+def get_args():
+    parser = argparse.ArgumentParser("Trade record analysis.")
+    parser.add_argument("--dir", dest="data_dir", default="./test_data")
+    parser.add_argument("-s", dest="start_date", required=True, help="Start date in YYYY/MM/DD")
+    parser.add_argument("-e", dest="end_date", required=True, help="End date in YYYY/MM/DD")
+    args = parser.parse_args()
+    return args
 
 class RiskManager:
     def __init__(self, data_dir):
@@ -17,7 +25,7 @@ class RiskManager:
         df = pd.read_csv(fname)
         df['net_earning'] = df['earning'] - df['cost']
         df['date'] = df[['year', 'month', 'day']].apply(lambda row: common.parse_date(f"{row.year}/{row.month:0>2}/{row.day:0>2}"), axis=1)
-        return df[['date', 'net_earning', 'margin']]
+        return df[['date', 'net_earning', 'invest']]
 
     @staticmethod
     def extract_extremes(pl_array):
@@ -48,32 +56,37 @@ class RiskManager:
     def extract_max_accum_loss(pl_array):
         ret = 0
         prev = float("inf")
+        start, span = 0, None
         for idx, pl in enumerate(pl_array):
             if prev > 0:
                 prev = pl
+                start = idx
             else:
                 prev += pl
 
             if pl < 0:
-                ret = min(prev, ret)
+                if prev < ret:
+                    span = (start, idx)
+                    ret = prev
 
-        return -ret
+        return -ret, span
 
     def extract_metrics(self, start, end):
         selected = self.data[(self.data.date >= start) & (self.data.date <= end)]
         num_transactions = max(selected.shape[0], 1)
         earliest_datelatest_date = selected['date'].min(), selected['date'].max()
         pl_array = selected['net_earning'].to_list()
-        trade_volume = sum(selected['margin'])
-        maximum_invest = max(selected['margin'])
+        trade_volume = sum(selected['invest'])
+        maximum_invest = max(selected['invest'])
         avg_invest = trade_volume / num_transactions
         profit_loss = sum(pl_array)
 
         max_accum_profit = self.extract_max_accum_profit(pl_array)
-        max_accum_loss = self.extract_max_accum_loss(pl_array)
+        max_accum_loss, n_span = self.extract_max_accum_loss(pl_array)
         max_loss, max_profit = self.extract_extremes(pl_array)
 
         div = 1 if max_accum_loss == 0 else max_accum_loss
+        avg_invest_during_losing = selected.loc[n_span[0]: n_span[1], 'invest'].mean()
         roi = profit_loss / avg_invest
         rot = profit_loss / trade_volume
 
@@ -81,21 +94,22 @@ class RiskManager:
             "Allow Investment Volume": int(
                 self.configs['capital'] *\
                 self.configs['risk_taking_ratio'] *\
-                avg_invest / div
+                avg_invest_during_losing / div
             ),
             "Average Invest": avg_invest,
-            "PL": profit_loss,
+            "P&L": profit_loss,
             "Profit-Risk ratio": profit_loss / div,
-            "Risk-Invest ratio": max_accum_loss / avg_invest,
+            "Risk-Invest Ratio": max_accum_loss / avg_invest_during_losing,
+            "Overall Risk-Invest Ratio": max_accum_loss / avg_invest,
             "ROI": f"{roi*100:.2f}%",
             "ROT": f"{rot*100:.2f}%",
             "_details": {
                 "ROI": roi,
                 "ROT": rot,
-                "Max accumulated loss": max_accum_loss,
-                "Max accumulated profit": max_accum_profit,
-                "Max single loss": max_loss,
-                "Max single profit": max_profit,
+                "Max Accumulated Loss": max_accum_loss,
+                "Max Accumulated Profit": max_accum_profit,
+                "Max Single Loss": max_loss,
+                "Max Single Profit": max_profit,
                 "Trade Volume": trade_volume,
                 "Maximum Invest": maximum_invest,
                 "Real Date Range": (
@@ -113,9 +127,6 @@ class RiskManager:
         common.show_result(metrics, title="Metrics")
 
 if __name__ == '__main__':
-    data_dir = "./test_data"
-    agent = RiskManager(data_dir=data_dir)
-    agent.query("2023/01/01", "2023/01/31")
-
-
-
+    args = get_args()
+    agent = RiskManager(data_dir=args.data_dir)
+    agent.query(args.start_date, args.end_date)
