@@ -12,6 +12,7 @@ def get_args():
     parser.add_argument("--dir", dest="data_dir", default="./test_data")
     parser.add_argument("-s", dest="start_date", required=True, help="Start date in YYYY/MM/DD")
     parser.add_argument("-e", dest="end_date", required=True, help="End date in YYYY/MM/DD")
+    parser.add_argument("--only-metrics", action="store_true", dest="only_show_metrics", help="no absolute values")
     args = parser.parse_args()
     return args
 
@@ -71,8 +72,9 @@ class RiskManager:
 
         return -ret, span
 
-    def extract_metrics(self, start, end):
+    def extract_metrics(self, start, end, only_show_metrics=True):
         selected = self.data[(self.data.date >= start) & (self.data.date <= end)]
+        selected.index = range(selected.shape[0])
         num_transactions = max(selected.shape[0], 1)
         earliest_datelatest_date = selected['date'].min(), selected['date'].max()
         pl_array = selected['net_earning'].to_list()
@@ -88,42 +90,58 @@ class RiskManager:
         roi = profit_loss / avg_invest
         rot = profit_loss / trade_volume
         div = 1 if max_accum_loss == 0 else max_accum_loss
-        avg_invest_during_losing = selected.loc[n_span[0]: n_span[1], 'invest'].mean() if n_span is not None else 1
+
+        if n_span is None:
+            avg_invest_during_losing = 1
+        if n_span[0] == n_span[1]:
+            avg_invest_during_losing = selected.loc[n_span[0], 'invest']
+        else:
+            avg_invest_during_losing = selected.loc[n_span[0]: n_span[1], 'invest'].mean()
+
         allowed_inv = int(self.configs['capital'] * self.configs['risk_taking_ratio'] * avg_invest_during_losing / div) if max_accum_loss > 0 else float("inf")
 
-        ret = {
-            "Allowed Investment Volume": allowed_inv,
-            "Average Invest": avg_invest,
-            "P&L": profit_loss,
-            "Profit-Risk ratio": profit_loss / div,
-            "Risk-Invest Ratio": max_accum_loss / avg_invest_during_losing,
-            "Overall Risk-Invest Ratio": max_accum_loss / avg_invest,
-            "ROI": f"{roi*100:.2f}%",
-            "ROT": f"{rot*100:.2f}%",
-            "_details": {
-                "ROI": roi,
-                "ROT": rot,
-                "Max Accumulated Loss": max_accum_loss,
-                "Max Accumulated Profit": max_accum_profit,
-                "Max Single Loss": max_loss,
-                "Max Single Profit": max_profit,
-                "Trade Volume": trade_volume,
-                "Maximum Invest": maximum_invest,
-                "Real Date Range": (
-                    common.form_date_string(selected['date'].min()),
-                    common.form_date_string(selected['date'].max())
-                )
-            },
-        }
+        if only_show_metrics:
+            ret = {
+                "Profit-Risk ratio": profit_loss / div,
+                "Risk-Invest Ratio": max_accum_loss / avg_invest_during_losing,
+                "Overall Risk-Invest Ratio": max_accum_loss / avg_invest,
+                "ROI": f"{roi*100:.2f}%",
+                "ROT": f"{rot*100:.2f}%",
+            }
+        else:
+            ret = {
+                "Allowed Investment Volume": allowed_inv,
+                "Average Invest": avg_invest,
+                "P&L": profit_loss,
+                "Profit-Risk ratio": profit_loss / div,
+                "Risk-Invest Ratio": max_accum_loss / avg_invest_during_losing,
+                "Overall Risk-Invest Ratio": max_accum_loss / avg_invest,
+                "ROI": f"{roi*100:.2f}%",
+                "ROT": f"{rot*100:.2f}%",
+                "_details": {
+                    "ROI": roi,
+                    "ROT": rot,
+                    "Max Accumulated Loss": max_accum_loss,
+                    "Max Accumulated Profit": max_accum_profit,
+                    "Max Single Loss": max_loss,
+                    "Max Single Profit": max_profit,
+                    "Trade Volume": trade_volume,
+                    "Maximum Invest": maximum_invest,
+                    "Real Date Range": (
+                        common.form_date_string(selected['date'].min()),
+                        common.form_date_string(selected['date'].max())
+                    )
+                },
+            }
         return ret
 
-    def query(self, start_date, end_date):
+    def query(self, start_date, end_date, only_show_metrics):
         start = common.parse_date(start_date)
         end = common.parse_date(end_date)
-        metrics = self.extract_metrics(start, end)
+        metrics = self.extract_metrics(start, end, only_show_metrics)
         common.show_result(metrics, title="Metrics")
 
 if __name__ == '__main__':
     args = get_args()
     agent = RiskManager(data_dir=args.data_dir)
-    agent.query(args.start_date, args.end_date)
+    agent.query(args.start_date, args.end_date, args.only_show_metrics)
