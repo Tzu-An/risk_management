@@ -1,0 +1,33 @@
+{
+    "Common Ratios": {
+        "Profit Factor": "Defined as the gross profit divided by the gross loss.",
+        "Profit Loss Ratio": "The average Profit on winning trades divided by the average loss on losing trades over a specified time period.",
+        "ROA": "Return on Assets, asset amount is defineded as the capital in the account.",
+        "ROI": "Return on Investment, investment amount is defineded as the maximum investment made in a specified period.",
+        "Win Ratio": "The total number of winners divided by the total number of losers."
+    },
+    "Gross Numbers": {
+    	"Net Profit": "Amount of money made after deducting all the trading commissions/fees and other expenses.",
+        "Max Loss": "Biggest loser, largest loss from a trade.",
+        "Max Profit": "Biggest winner, the most profitable trade.",
+        "Average Invest": "Average amount of investments during a specified time period.",
+        "Maximum Invest": "Maximum amount of investments during a specified time period.",
+        "Max Accumulated Profit": "Maximum accumulated profit during a specified time period.",
+        "Max Drawdown": "How much this trading account is down from the peak before it recovers back to the peak.",
+    	"Average Holding Days": "Round the average holding times of the trades upward to its nearest integer (days).",
+        "Max Holding Days": "Round the maximum holding time of the trades upward to its nearest integer (days).",
+        "Number of the Trades": "Number of the trades made in a specified time period.",
+        "Amount of the Transactions": "Amount of the transactions made in a specified time period."
+    },
+    "User Defined Ratios": {
+    	"Allowed Investing Capital": "Cap of the investment deduced from the capital and risk_taking_ratio setting in the configuration file.",
+        "Profit-Risk Ratio": "Net profit divided by the max drawdown value.",
+        "Return on Trades": "Net profit divided by the amount of the transactions.",
+        "Average ROI on Trades": "Net profit divided by the average amount of the transactions.",
+        "Risk-Invest Ratio": "Max drawdown divided by the average amount of the transactions made during that time period.",
+        "Overall Risk-Invest Ratio": "Max drawdown divided by the average amount of the transactions.",
+        "Max Drawdown Percentage": "Max drawdown divided by the capital in the configuration file."
+    },
+    "Expecting ROA": "Expected value of the ROA if you are trading with the allowed investing capital and getting the same ROI.",
+    "Real Date Range": "The actual date range of the trades that can be found in the given time period.",
+}

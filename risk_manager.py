@@ -16,6 +16,7 @@ def get_args():
     args = parser.parse_args()
     return args
 
+
 class RiskManager:
     def __init__(self, data_dir):
         self.data = self.load_data_to_dataframe(os.path.join(data_dir, "trade_record.csv"))
@@ -83,11 +84,11 @@ class RiskManager:
 
     def extract_gross_numbers(self, selected_data):
         ret = dict()
-        ret["Number of Transactions"] = selected_data.shape[0]
-        ret["Trade Volume"] = sum(selected_data["invest"])
+        ret["Number of the Trades"] = selected_data.shape[0]
+        ret["Number of the Transactions"] = sum(selected_data["invest"])
         ret["Maximum Invest"] = max(selected_data["invest"])
-        if ret["Number of Transactions"] > 0:
-            ret["Average Invest"] = ret["Trade Volume"] / ret["Number of Transactions"]
+        if ret["Number of the Trades"] > 0:
+            ret["Average Invest"] = ret["Number of the Transactions"] / ret["Number of the Trades"]
         else:
             ret["Average Invest"] = 0
 
@@ -109,9 +110,11 @@ class RiskManager:
         if sum(loses) > 0:
             ret["Win Ratio"] = float(sum(wins) / selected_data.shape[0])
             ret["Profit Factor"] = abs(sum(selected_data["net_earning"][wins]) / sum(selected_data["net_earning"][loses]))
+            ret["Profit Loss Ratio"] = abs(selected_data["net_earning"][wins].mean() / selected_data["net_earning"][loses].mean())
         else:
             ret["Win Ratio"] = float("inf") if sum(wins) > 0 else float("nan")
             ret["Profit Factor"] = float("inf") if sum(selected_data["net_earning"][wins]) > 0 else float("nan")
+            ret["Profit Loss Ratio"] = float("inf") if sum(selected_data["net_earning"][wins]) > 0 else float("nan")
 
         ret["ROA"] = gross_numbers["Net Profit"] / self.configs["capital"]
         ret["ROI"] = gross_numbers["Net Profit"] / gross_numbers["Maximum Invest"]
@@ -121,7 +124,7 @@ class RiskManager:
         ret = dict()
         if gross_numbers["Net Profit"] != 0:
             ret["Average ROI on Trades"] = gross_numbers["Net Profit"] / gross_numbers["Average Invest"]
-            ret["Return on Trades"] = gross_numbers["Net Profit"] / gross_numbers["Trade Volume"]
+            ret["Return on Trades"] = gross_numbers["Net Profit"] / gross_numbers["Number of the Transactions"]
         else:
             ret["Average ROI on Trades"] = 0
             ret["Return on Trades"] = 0
@@ -144,7 +147,7 @@ class RiskManager:
         ret["Risk-Invest Ratio"] = potential_max_loss_ratio
         ret["Profit-Risk Ratio"] = float(gross_numbers["Net Profit"] / gross_numbers["Max Drawdown"]) if gross_numbers["Max Drawdown"] != 0 else float("inf")
         ret["Overall Risk-Invest Ratio"] = float(gross_numbers["Max Drawdown"] / gross_numbers["Average Invest"]) if gross_numbers["Average Invest"] > 0 else float("inf")
-
+        ret["Max Drawdown Percentage"] = gross_numbers["Max Drawdown"] / self.configs["capital"]
         return ret
 
     def extract_metrics(self, selected_data):
@@ -171,6 +174,7 @@ class RiskManager:
         metrics["User Defined Ratios"]["Risk-Invest Ratio"] = common.format_perc_string(metrics["User Defined Ratios"]["Risk-Invest Ratio"])
         metrics["User Defined Ratios"]["Overall Risk-Invest Ratio"] = common.format_perc_string(metrics["User Defined Ratios"]["Overall Risk-Invest Ratio"])
         metrics["User Defined Ratios"]["Return on Trades"] = common.format_perc_string(metrics["User Defined Ratios"]["Return on Trades"])
+        metrics["User Defined Ratios"]["Max Drawdown Percentage"] = common.format_perc_string(metrics["User Defined Ratios"]["Max Drawdown Percentage"])
         metrics["Expecting ROA"] = common.format_perc_string(metrics["Expecting ROA"])
 
         if keep_privacy:
@@ -182,7 +186,9 @@ class RiskManager:
                 "ROI": metrics["Common Ratios"]["ROI"],
                 "Expecting ROA": metrics["Expecting ROA"],
                 "ROT": metrics["User Defined Ratios"]["Return on Trades"],
+                "Max Drawdown Percentage": metrics["User Defined Ratios"]["Max Drawdown Percentage"],
                 "Profit Factor": metrics["Common Ratios"]["Profit Factor"],
+                "Profit Loss Ratio": metrics["Common Ratios"]["Profit Loss Ratio"],
                 "Longest Holding Days": metrics["Gross Numbers"]["Max Holding Days"]
             }
             return ret
