@@ -26,19 +26,26 @@ class RiskManager:
         df = pd.read_csv(fname)
         if df.shape[0] == 0:
             raise ValueError("No Transaction Data")
+
         df["net_earning"] = df["earning"] - df["cost"]
-        df["date"] = df[["year", "month", "day"]].apply(lambda row: common.parse_date(f"{row.year}/{row.month:0>2}/{row.day:0>2}"), axis=1)
-        return df[["date", "net_earning", "invest"]]
+        df["entry_date"] = df[["entry_year", "entry_month", "entry_day"]].apply(
+            lambda row: common.parse_date(f"{row.entry_year}/{row.entry_month:0>2}/{row.entry_day:0>2}"),
+            axis=1
+        )
+        df["close_date"] = df[["close_year", "close_month", "close_day"]].apply(
+            lambda row: common.parse_date(f"{row.close_year}/{row.close_month:0>2}/{row.close_day:0>2}"),
+            axis=1
+        )
+        df["holding_days"] = (df["close_date"] - df["entry_date"]).apply(lambda dur: dur.days + 1)
+        return df[["entry_date", "close_date", "holding_days", "net_earning", "invest"]]
 
     @staticmethod
-    def extract_extremes(pl_array):
-        ret_gain, ret_loss = 0, 0
-        for pl in pl_array:
-            if pl > ret_gain:
-                ret_gain = pl
-            elif pl < ret_loss:
-                ret_loss = pl
-        return -ret_loss, ret_gain
+    def select_data_in_drange(data, start_date, end_date):
+        start = common.parse_date(start_date)
+        end = common.parse_date(end_date)
+        selected = data[(data.entry_date >= start) & (data.close_date <= end)]
+        selected.index = range(selected.shape[0])
+        return selected
 
     @staticmethod
     def extract_max_accum_profit(pl_array):
@@ -85,12 +92,13 @@ class RiskManager:
             ret["Average Invest"] = 0
 
         pl_array = selected_data["net_earning"].to_list()
-        max_loss, max_profit = self.extract_extremes(pl_array)
         ret["Net Profit"] = sum(pl_array)
         ret["Max Accumulated Profit"] = self.extract_max_accum_profit(pl_array)
         ret["Max Drawdown"], ret["n_span"] = self.extract_max_accum_loss(pl_array)
-        ret["Max Loss"] = max_loss
-        ret["Max Profit"] = max_profit
+        ret["Max Loss"] = - min(min(pl_array), 0)
+        ret["Max Profit"] = max(max(pl_array), 0)
+        ret["Average Holding Days"] = selected_data["holding_days"].mean()
+        ret["Max Holding Days"] = selected_data["holding_days"].max()
         return ret
 
     def extract_common_ratios(self, selected_data, gross_numbers):
@@ -148,8 +156,8 @@ class RiskManager:
             "Common Ratios": common_ratios,
             "User Defined Ratios": udf_ratios,
             "Real Date Range": (
-                common.form_date_string(selected_data["date"].min()),
-                common.form_date_string(selected_data["date"].max())
+                common.form_date_string(selected_data["entry_date"].min()),
+                common.form_date_string(selected_data["close_date"].max())
                 ),
             "Expecting ROA": udf_ratios["Allowed Investing Capital"] * common_ratios["ROI"] / self.configs["capital"]
         }
@@ -174,18 +182,11 @@ class RiskManager:
                 "ROI": metrics["Common Ratios"]["ROI"],
                 "Expecting ROA": metrics["Expecting ROA"],
                 "ROT": metrics["User Defined Ratios"]["Return on Trades"],
-                "Profit Factor": metrics["Common Ratios"]["Profit Factor"]
+                "Profit Factor": metrics["Common Ratios"]["Profit Factor"],
+                "Longest Holding Days": metrics["Gross Numbers"]["Max Holding Days"]
             }
             return ret
         return metrics
-
-    @staticmethod
-    def select_data_in_drange(data, start_date, end_date):
-        start = common.parse_date(start_date)
-        end = common.parse_date(end_date)
-        selected = data[(data.date >= start) & (data.date <= end)]
-        selected.index = range(selected.shape[0])
-        return selected
 
     def query(self, start_date, end_date, keep_privacy):
         selected_data = self.select_data_in_drange(self.data, start_date, end_date)
