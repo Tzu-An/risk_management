@@ -22,3 +22,6 @@ def parse_date(inp_date):
 
 def form_date_string(inp_date):
     return datetime.strftime(inp_date, DATE_FORMAT)
+
+def format_perc_string(inp):
+    return f"{inp*100:.4f}%"

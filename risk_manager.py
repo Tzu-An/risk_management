@@ -12,7 +12,7 @@ def get_args():
     parser.add_argument("--dir", dest="data_dir", default="./test_data")
     parser.add_argument("-s", dest="start_date", required=True, help="Start date in YYYY/MM/DD")
     parser.add_argument("-e", dest="end_date", required=True, help="End date in YYYY/MM/DD")
-    parser.add_argument("--only-metrics", action="store_true", dest="only_show_metrics", help="no absolute values")
+    parser.add_argument("--keep-privacy", action="store_true", dest="keep_privacy", help="avoid returning data with privacy issue")
     args = parser.parse_args()
     return args
 
@@ -24,9 +24,11 @@ class RiskManager:
     @staticmethod
     def load_data_to_dataframe(fname):
         df = pd.read_csv(fname)
-        df['net_earning'] = df['earning'] - df['cost']
-        df['date'] = df[['year', 'month', 'day']].apply(lambda row: common.parse_date(f"{row.year}/{row.month:0>2}/{row.day:0>2}"), axis=1)
-        return df[['date', 'net_earning', 'invest']]
+        if df.shape[0] == 0:
+            raise ValueError("No Transaction Data")
+        df["net_earning"] = df["earning"] - df["cost"]
+        df["date"] = df[["year", "month", "day"]].apply(lambda row: common.parse_date(f"{row.year}/{row.month:0>2}/{row.day:0>2}"), axis=1)
+        return df[["date", "net_earning", "invest"]]
 
     @staticmethod
     def extract_extremes(pl_array):
@@ -72,76 +74,128 @@ class RiskManager:
 
         return -ret, span
 
-    def extract_metrics(self, start, end, only_show_metrics=True):
-        selected = self.data[(self.data.date >= start) & (self.data.date <= end)]
-        selected.index = range(selected.shape[0])
-        num_transactions = max(selected.shape[0], 1)
-        earliest_datelatest_date = selected['date'].min(), selected['date'].max()
-        pl_array = selected['net_earning'].to_list()
-        trade_volume = sum(selected['invest'])
-        maximum_invest = max(selected['invest'])
-        avg_invest = trade_volume / num_transactions
-        profit_loss = sum(pl_array)
+    def extract_gross_numbers(self, selected_data):
+        ret = dict()
+        ret["Number of Transactions"] = selected_data.shape[0]
+        ret["Trade Volume"] = sum(selected_data["invest"])
+        ret["Maximum Invest"] = max(selected_data["invest"])
+        if ret["Number of Transactions"] > 0:
+            ret["Average Invest"] = ret["Trade Volume"] / ret["Number of Transactions"]
+        else:
+            ret["Average Invest"] = 0
 
-        max_accum_profit = self.extract_max_accum_profit(pl_array)
-        max_accum_loss, n_span = self.extract_max_accum_loss(pl_array)
+        pl_array = selected_data["net_earning"].to_list()
         max_loss, max_profit = self.extract_extremes(pl_array)
-
-        roi = profit_loss / avg_invest
-        rot = profit_loss / trade_volume
-        div = 1 if max_accum_loss == 0 else max_accum_loss
-
-        if n_span is None:
-            avg_invest_during_losing = 1
-        if n_span[0] == n_span[1]:
-            avg_invest_during_losing = selected.loc[n_span[0], 'invest']
-        else:
-            avg_invest_during_losing = selected.loc[n_span[0]: n_span[1], 'invest'].mean()
-
-        allowed_inv = int(self.configs['capital'] * self.configs['risk_taking_ratio'] * avg_invest_during_losing / div) if max_accum_loss > 0 else float("inf")
-
-        if only_show_metrics:
-            ret = {
-                "Profit-Risk ratio": profit_loss / div,
-                "Risk-Invest Ratio": max_accum_loss / avg_invest_during_losing,
-                "Overall Risk-Invest Ratio": max_accum_loss / avg_invest,
-                "ROI": f"{roi*100:.2f}%",
-                "ROT": f"{rot*100:.2f}%",
-            }
-        else:
-            ret = {
-                "Allowed Investment Volume": allowed_inv,
-                "Average Invest": avg_invest,
-                "P&L": profit_loss,
-                "Profit-Risk ratio": profit_loss / div,
-                "Risk-Invest Ratio": max_accum_loss / avg_invest_during_losing,
-                "Overall Risk-Invest Ratio": max_accum_loss / avg_invest,
-                "ROI": f"{roi*100:.2f}%",
-                "ROT": f"{rot*100:.2f}%",
-                "_details": {
-                    "ROI": roi,
-                    "ROT": rot,
-                    "Max Accumulated Loss": max_accum_loss,
-                    "Max Accumulated Profit": max_accum_profit,
-                    "Max Single Loss": max_loss,
-                    "Max Single Profit": max_profit,
-                    "Trade Volume": trade_volume,
-                    "Maximum Invest": maximum_invest,
-                    "Real Date Range": (
-                        common.form_date_string(selected['date'].min()),
-                        common.form_date_string(selected['date'].max())
-                    )
-                },
-            }
+        ret["Net Profit"] = sum(pl_array)
+        ret["Max Accumulated Profit"] = self.extract_max_accum_profit(pl_array)
+        ret["Max Drawdown"], ret["n_span"] = self.extract_max_accum_loss(pl_array)
+        ret["Max Loss"] = max_loss
+        ret["Max Profit"] = max_profit
         return ret
 
-    def query(self, start_date, end_date, only_show_metrics):
+    def extract_common_ratios(self, selected_data, gross_numbers):
+        ret = dict()
+        wins = (selected_data["net_earning"] > 0).tolist()
+        loses = (selected_data["net_earning"] < 0).tolist()
+
+        if sum(loses) > 0:
+            ret["Win Ratio"] = float(sum(wins) / selected_data.shape[0])
+            ret["Profit Factor"] = abs(sum(selected_data["net_earning"][wins]) / sum(selected_data["net_earning"][loses]))
+        else:
+            ret["Win Ratio"] = float("inf") if sum(wins) > 0 else float("nan")
+            ret["Profit Factor"] = float("inf") if sum(selected_data["net_earning"][wins]) > 0 else float("nan")
+
+        ret["ROA"] = gross_numbers["Net Profit"] / self.configs["capital"]
+        ret["ROI"] = gross_numbers["Net Profit"] / gross_numbers["Maximum Invest"]
+        return ret
+
+    def extract_udf_ratios(self, selected_data, gross_numbers):
+        ret = dict()
+        if gross_numbers["Net Profit"] != 0:
+            ret["Average ROI on Trades"] = gross_numbers["Net Profit"] / gross_numbers["Average Invest"]
+            ret["Return on Trades"] = gross_numbers["Net Profit"] / gross_numbers["Trade Volume"]
+        else:
+            ret["Average ROI on Trades"] = 0
+            ret["Return on Trades"] = 0
+
+        n_span = gross_numbers.pop("n_span")
+        if n_span is None:
+            avg_invest_during_losing = 1 # for computation convenience
+        elif n_span[0] == n_span[1]:
+            avg_invest_during_losing = selected_data.loc[n_span[0], "invest"]
+        else:
+            avg_invest_during_losing = selected_data.loc[n_span[0]: n_span[1], "invest"].mean()
+
+        potential_max_loss_ratio = gross_numbers["Max Drawdown"] / avg_invest_during_losing
+
+        if potential_max_loss_ratio == 0:
+            ret["Allowed Investing Capital"] = self.configs["capital"]
+        else:
+            ret["Allowed Investing Capital"] = int(self.configs["capital"] * self.configs["risk_taking_ratio"] / potential_max_loss_ratio)
+
+        ret["Risk-Invest Ratio"] = potential_max_loss_ratio
+        ret["Profit-Risk Ratio"] = float(gross_numbers["Net Profit"] / gross_numbers["Max Drawdown"]) if gross_numbers["Max Drawdown"] != 0 else float("inf")
+        ret["Overall Risk-Invest Ratio"] = float(gross_numbers["Max Drawdown"] / gross_numbers["Average Invest"]) if gross_numbers["Average Invest"] > 0 else float("inf")
+
+        return ret
+
+    def extract_metrics(self, selected_data):
+        gross_numbers = self.extract_gross_numbers(selected_data)
+        common_ratios = self.extract_common_ratios(selected_data, gross_numbers)
+        udf_ratios = self.extract_udf_ratios(selected_data, gross_numbers)
+        ret = {
+            "Gross Numbers": gross_numbers,
+            "Common Ratios": common_ratios,
+            "User Defined Ratios": udf_ratios,
+            "Real Date Range": (
+                common.form_date_string(selected_data["date"].min()),
+                common.form_date_string(selected_data["date"].max())
+                ),
+            "Expecting ROA": udf_ratios["Allowed Investing Capital"] * common_ratios["ROI"] / self.configs["capital"]
+        }
+        return ret
+
+    def format_metrics(self, metrics, keep_privacy):
+        metrics["Common Ratios"]["ROI"] = common.format_perc_string(metrics["Common Ratios"]["ROI"])
+        metrics["Common Ratios"]["ROA"] = common.format_perc_string(metrics["Common Ratios"]["ROA"])
+        metrics["Common Ratios"]["Win Ratio"] = common.format_perc_string(metrics["Common Ratios"]["Win Ratio"])
+        metrics["User Defined Ratios"]["Average ROI on Trades"] = common.format_perc_string(metrics["User Defined Ratios"]["Average ROI on Trades"])
+        metrics["User Defined Ratios"]["Risk-Invest Ratio"] = common.format_perc_string(metrics["User Defined Ratios"]["Risk-Invest Ratio"])
+        metrics["User Defined Ratios"]["Overall Risk-Invest Ratio"] = common.format_perc_string(metrics["User Defined Ratios"]["Overall Risk-Invest Ratio"])
+        metrics["User Defined Ratios"]["Return on Trades"] = common.format_perc_string(metrics["User Defined Ratios"]["Return on Trades"])
+        metrics["Expecting ROA"] = common.format_perc_string(metrics["Expecting ROA"])
+
+        if keep_privacy:
+            ret = {
+                "Profit-Risk Ratio": metrics["User Defined Ratios"]["Profit-Risk Ratio"],
+                "Risk-Invest Ratio": metrics["User Defined Ratios"]["Risk-Invest Ratio"],
+                "Overall Risk-Invest Ratio": metrics["User Defined Ratios"]["Overall Risk-Invest Ratio"],
+                "Win Ratio": metrics["Common Ratios"]["Win Ratio"],
+                "ROI": metrics["Common Ratios"]["ROI"],
+                "Expecting ROA": metrics["Expecting ROA"],
+                "ROT": metrics["User Defined Ratios"]["Return on Trades"],
+                "Profit Factor": metrics["Common Ratios"]["Profit Factor"]
+            }
+            return ret
+        return metrics
+
+    @staticmethod
+    def select_data_in_drange(data, start_date, end_date):
         start = common.parse_date(start_date)
         end = common.parse_date(end_date)
-        metrics = self.extract_metrics(start, end, only_show_metrics)
+        selected = data[(data.date >= start) & (data.date <= end)]
+        selected.index = range(selected.shape[0])
+        return selected
+
+    def query(self, start_date, end_date, keep_privacy):
+        selected_data = self.select_data_in_drange(self.data, start_date, end_date)
+        if selected_data.shape[0] == 0:
+            raise ValueError(f"No Transaction Data in date range {start_date} - {end_date}")
+        metrics = self.extract_metrics(selected_data)
+        metrics = self.format_metrics(metrics, keep_privacy)
         common.show_result(metrics, title="Metrics")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = get_args()
     agent = RiskManager(data_dir=args.data_dir)
-    agent.query(args.start_date, args.end_date, args.only_show_metrics)
+    agent.query(args.start_date, args.end_date, args.keep_privacy)
