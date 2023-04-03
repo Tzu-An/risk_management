@@ -123,10 +123,10 @@ class RiskManager:
     def extract_udf_ratios(self, selected_data, gross_numbers):
         ret = dict()
         if gross_numbers["Net Profit"] != 0:
-            ret["Average ROI on Trades"] = gross_numbers["Net Profit"] / gross_numbers["Average Invest"]
+            ret["Return on the Average Investment"] = gross_numbers["Net Profit"] / gross_numbers["Average Invest"]
             ret["Return on Trades"] = gross_numbers["Net Profit"] / gross_numbers["Number of the Transactions"]
         else:
-            ret["Average ROI on Trades"] = 0
+            ret["Return on the Average Investment"] = 0
             ret["Return on Trades"] = 0
 
         n_span = gross_numbers.pop("n_span")
@@ -170,7 +170,7 @@ class RiskManager:
         metrics["Common Ratios"]["ROI"] = common.format_perc_string(metrics["Common Ratios"]["ROI"])
         metrics["Common Ratios"]["ROA"] = common.format_perc_string(metrics["Common Ratios"]["ROA"])
         metrics["Common Ratios"]["Win Ratio"] = common.format_perc_string(metrics["Common Ratios"]["Win Ratio"])
-        metrics["User Defined Ratios"]["Average ROI on Trades"] = common.format_perc_string(metrics["User Defined Ratios"]["Average ROI on Trades"])
+        metrics["User Defined Ratios"]["Return on the Average Investment"] = common.format_perc_string(metrics["User Defined Ratios"]["Return on the Average Investment"])
         metrics["User Defined Ratios"]["Risk-Invest Ratio"] = common.format_perc_string(metrics["User Defined Ratios"]["Risk-Invest Ratio"])
         metrics["User Defined Ratios"]["Overall Risk-Invest Ratio"] = common.format_perc_string(metrics["User Defined Ratios"]["Overall Risk-Invest Ratio"])
         metrics["User Defined Ratios"]["Return on Trades"] = common.format_perc_string(metrics["User Defined Ratios"]["Return on Trades"])
