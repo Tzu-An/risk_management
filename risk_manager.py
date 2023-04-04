@@ -14,6 +14,7 @@ def get_args():
     parser.add_argument("-e", dest="end_date", required=True, help="End date in YYYY/MM/DD")
     parser.add_argument("--keep-privacy", action="store_true", dest="keep_privacy", help="avoid returning data with privacy issue")
     args = parser.parse_args()
+
     return args
 
 
@@ -38,6 +39,7 @@ class RiskManager:
             axis=1
         )
         df["holding_days"] = (df["close_date"] - df["entry_date"]).apply(lambda dur: dur.days + 1)
+
         return df[["entry_date", "close_date", "holding_days", "net_earning", "invest"]]
 
     @staticmethod
@@ -46,6 +48,7 @@ class RiskManager:
         end = common.parse_date(end_date)
         selected = data[(data.entry_date >= start) & (data.close_date <= end)]
         selected.index = range(selected.shape[0])
+
         return selected
 
     @staticmethod
@@ -100,6 +103,7 @@ class RiskManager:
         ret["Max Profit"] = max(max(pl_array), 0)
         ret["Average Holding Days"] = selected_data["holding_days"].mean()
         ret["Max Holding Days"] = selected_data["holding_days"].max()
+
         return ret
 
     def extract_common_ratios(self, selected_data, gross_numbers):
@@ -118,6 +122,7 @@ class RiskManager:
 
         ret["ROA"] = gross_numbers["Net Profit"] / self.configs["capital"]
         ret["ROI"] = gross_numbers["Net Profit"] / gross_numbers["Maximum Invest"]
+
         return ret
 
     def extract_udf_ratios(self, selected_data, gross_numbers):
@@ -135,19 +140,20 @@ class RiskManager:
         elif n_span[0] == n_span[1]:
             avg_invest_during_losing = selected_data.loc[n_span[0], "invest"]
         else:
-            avg_invest_during_losing = selected_data.loc[n_span[0]: n_span[1], "invest"].mean()
+            weights = abs(selected_data.loc[n_span[0]: n_span[1], "net_earning"] / selected_data.loc[n_span[0]: n_span[1], "invest"]).to_numpy()
+            avg_invest_during_losing = sum(selected_data.loc[n_span[0]: n_span[1], "invest"] * weights) / weights.sum()
 
-        potential_max_loss_ratio = gross_numbers["Max Drawdown"] / avg_invest_during_losing
+        ret["Risk-Invest Ratio"] = gross_numbers["Max Drawdown"] / avg_invest_during_losing
+        ret["Overall Risk-Invest Ratio"] = float(gross_numbers["Max Drawdown"] / gross_numbers["Average Invest"]) if gross_numbers["Average Invest"] > 0 else float("inf")
 
-        if potential_max_loss_ratio == 0:
+        if gross_numbers["Max Drawdown"] == 0:
             ret["Allowed Investing Capital"] = self.configs["capital"]
         else:
-            ret["Allowed Investing Capital"] = int(self.configs["capital"] * self.configs["risk_taking_ratio"] / potential_max_loss_ratio)
+            ret["Allowed Investing Capital"] = int(self.configs["capital"] * self.configs["risk_taking_ratio"] / ret["Risk-Invest Ratio"])
 
-        ret["Risk-Invest Ratio"] = potential_max_loss_ratio
         ret["Profit-Risk Ratio"] = float(gross_numbers["Net Profit"] / gross_numbers["Max Drawdown"]) if gross_numbers["Max Drawdown"] != 0 else float("inf")
-        ret["Overall Risk-Invest Ratio"] = float(gross_numbers["Max Drawdown"] / gross_numbers["Average Invest"]) if gross_numbers["Average Invest"] > 0 else float("inf")
         ret["Max Drawdown Percentage"] = gross_numbers["Max Drawdown"] / self.configs["capital"]
+
         return ret
 
     def extract_metrics(self, selected_data):
@@ -164,6 +170,7 @@ class RiskManager:
                 ),
             "Expecting ROA": udf_ratios["Allowed Investing Capital"] * common_ratios["ROI"] / self.configs["capital"]
         }
+
         return ret
 
     def format_metrics(self, metrics, keep_privacy):
@@ -194,12 +201,14 @@ class RiskManager:
                 "Return on the Average Investment": metrics["User Defined Ratios"]["Return on the Average Investment"]
             }
             return ret
+
         return metrics
 
     def query(self, start_date, end_date, keep_privacy):
         selected_data = self.select_data_in_drange(self.data, start_date, end_date)
         if selected_data.shape[0] == 0:
             raise ValueError(f"No Transaction Data in date range {start_date} - {end_date}")
+
         metrics = self.extract_metrics(selected_data)
         metrics = self.format_metrics(metrics, keep_privacy)
         common.show_result(metrics, title="Metrics")
