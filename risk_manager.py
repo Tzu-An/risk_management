@@ -190,7 +190,8 @@ class RiskManager:
                 "Profit Factor": metrics["Common Ratios"]["Profit Factor"],
                 "Profit Loss Ratio": metrics["Common Ratios"]["Profit Loss Ratio"],
                 "Max Holding Days": metrics["Gross Numbers"]["Max Holding Days"],
-                "Average Holding Days": metrics["Gross Numbers"]["Average Holding Days"]
+                "Average Holding Days": metrics["Gross Numbers"]["Average Holding Days"],
+                "Return on the Average Investment": metrics["User Defined Ratios"]["Return on the Average Investment"]
             }
             return ret
         return metrics
