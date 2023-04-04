@@ -85,10 +85,10 @@ class RiskManager:
     def extract_gross_numbers(self, selected_data):
         ret = dict()
         ret["Number of the Trades"] = selected_data.shape[0]
-        ret["Number of the Transactions"] = sum(selected_data["invest"])
+        ret["Amount of the Transactions"] = sum(selected_data["invest"])
         ret["Maximum Invest"] = max(selected_data["invest"])
         if ret["Number of the Trades"] > 0:
-            ret["Average Invest"] = ret["Number of the Transactions"] / ret["Number of the Trades"]
+            ret["Average Invest"] = ret["Amount of the Transactions"] / ret["Number of the Trades"]
         else:
             ret["Average Invest"] = 0
 
@@ -124,7 +124,7 @@ class RiskManager:
         ret = dict()
         if gross_numbers["Net Profit"] != 0:
             ret["Return on the Average Investment"] = gross_numbers["Net Profit"] / gross_numbers["Average Invest"]
-            ret["Return on Trades"] = gross_numbers["Net Profit"] / gross_numbers["Number of the Transactions"]
+            ret["Return on Trades"] = gross_numbers["Net Profit"] / gross_numbers["Amount of the Transactions"]
         else:
             ret["Return on the Average Investment"] = 0
             ret["Return on Trades"] = 0
@@ -185,11 +185,12 @@ class RiskManager:
                 "Win Ratio": metrics["Common Ratios"]["Win Ratio"],
                 "ROI": metrics["Common Ratios"]["ROI"],
                 "Expecting ROA": metrics["Expecting ROA"],
-                "ROT": metrics["User Defined Ratios"]["Return on Trades"],
+                "Return on Trades": metrics["User Defined Ratios"]["Return on Trades"],
                 "Max Drawdown Percentage": metrics["User Defined Ratios"]["Max Drawdown Percentage"],
                 "Profit Factor": metrics["Common Ratios"]["Profit Factor"],
                 "Profit Loss Ratio": metrics["Common Ratios"]["Profit Loss Ratio"],
-                "Longest Holding Days": metrics["Gross Numbers"]["Max Holding Days"]
+                "Max Holding Days": metrics["Gross Numbers"]["Max Holding Days"],
+                "Average Holding Days": metrics["Gross Numbers"]["Average Holding Days"]
             }
             return ret
         return metrics

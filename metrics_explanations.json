@@ -22,7 +22,7 @@
     "User Defined Ratios": {
     	"Allowed Investing Capital": "Cap of the investment deduced from the capital and risk_taking_ratio setting in the configuration file.",
         "Profit-Risk Ratio": "Net profit divided by the max drawdown value.",
-        "Return on Trades": "Net profit divided by the number of the transactions.",
+        "Return on Trades": "Net profit divided by the amount of the transactions.",
         "Return on the Average Investment": "Net profit divided by the average amount of the transactions.",
         "Risk-Invest Ratio": "Max drawdown divided by the average amount of the transactions made during that time period.",
         "Overall Risk-Invest Ratio": "Max drawdown divided by the average amount of the transactions.",
